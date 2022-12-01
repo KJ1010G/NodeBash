@@ -28,3 +28,9 @@
 <ol>
 <li>`&lt;path_to_node&gt; app.js` - Should run a NodeJS script named app.js in the current working directory of the app.</li>
 </ol>
+
+<h1>What I referenced</h1>
+<ol>
+<li>Nodejs docs</li>
+<li>stack overflow</li>
+</ol>
