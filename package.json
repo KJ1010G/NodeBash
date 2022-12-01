@@ -1,0 +1,20 @@
+{
+  "name": "nodebash",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "A minimal feature bash like shell, written in nodejs",
+  "main": "shell.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KJ1010G/NodeBash.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/KJ1010G/NodeBash/issues"
+  },
+  "homepage": "https://github.com/KJ1010G/NodeBash#readme"
+}
