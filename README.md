@@ -33,4 +33,5 @@
 <ol>
 <li>Nodejs docs</li>
 <li>stack overflow</li>
+<li>Linux man pages</li>
 </ol>
