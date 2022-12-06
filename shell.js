@@ -33,6 +33,7 @@ function askAndHandleCommand() {
     let commandArr = command.split(' ');
     if (commandArr[0] == 'exit' && commandArr.length == 1) {
       releaseResources();
+      process.exit();
       return;
     }
     else if (commandArr[0] == 'pwd' && commandArr.length == 1) {
@@ -51,6 +52,12 @@ function askAndHandleCommand() {
     else if (commandArr[0] == '') {
       // ignore, cause this case causes error in path to binary function
     }
+    // else if (commandArr[0] == 'jobs') {
+    //   Object.keys(runningChilds).forEach((pid) => {
+    //     console.log(pid);
+    //     console.log(runningChilds[pid].connected);
+    //   });
+    // }
     else { // search for executable
       pathToBinary(commandArr);
       askAgain = false;
@@ -116,6 +123,18 @@ function fg(cmdArr) {
   if (foregroundChildProcessId == null) {
     if (runningChilds[cmdArr[1]]) {
       foregroundChildProcessId = cmdArr[1];
+      // runningChilds[foregroundChildProcessId].kill('SIGCONT');
+      child_process.execSync(`kill -18 ${foregroundChildProcessId}`);
+      // console.log(`kill -18 ${foregroundChildProcessId}`);
+      // runningChilds[foregroundChildProcessId].stdout.on('data', (data) => {
+      //   // console.log(`stdout: ${data}`);
+      //   process.stdout.write(`${data}`);
+      // });
+    
+      // runningChilds[foregroundChildProcessId].stderr.on('data', (data) => {
+      //   // console.error(`stderr: ${data}`);
+      //   process.stderr.write(`${data}`);
+      // });
     }
     else {
       console.log('Invalid pid');
@@ -131,7 +150,11 @@ function fg(cmdArr) {
 
 function pathToBinary(cmdArr) {
 
-  const childBinary = child_process.spawn(cmdArr[0], cmdArr.slice(1));
+  const childBinary = child_process.spawn(cmdArr[0], cmdArr.slice(1), {
+    shell: true,
+    stdio: 'inherit',
+    // stdio: ['pipe', 'inherit', 'inherit']
+  });
 
   let successfullySpawned = false;
 
@@ -145,20 +168,20 @@ function pathToBinary(cmdArr) {
     console.error(`${cmdArr[0]}: error: ${err.message}`);
   });
 
-  childBinary.stdout.on('data', (data) => {
-    // console.log(`stdout: ${data}`);
-    process.stdout.write(`${data}`);
-  });
+  // childBinary.stdout.on('data', (data) => {
+  //   // console.log(`stdout: ${data}`);
+  //   process.stdout.write(`${data}`);
+  // });
 
-  childBinary.stderr.on('data', (data) => {
-    // console.error(`stderr: ${data}`);
-    process.stderr.write(`${data}`);
-  });
-    
+  // childBinary.stderr.on('data', (data) => {
+  //   // console.error(`stderr: ${data}`);
+  //   process.stderr.write(`${data}`);
+  // });
+
   childBinary.on('close', (code) => {
     console.log(`command ${cmdArr[0]} exited with code ${code}`);
     delete runningChilds[childBinary.pid];
-    if (foregroundChildProcessId == childBinary.pid) {
+    if ( foregroundChildProcessId != null && foregroundChildProcessId == childBinary.pid) {
       foregroundChildProcessId = null;
       setTimeout(() => {
         askAndHandleCommand();
@@ -171,22 +194,29 @@ function pathToBinary(cmdArr) {
     }
   });
 
+  childBinary.on('exit', (code) => {
+    console.log(`exit event recieved on child process id : ${childBinary.pid}`);
+  });
+
 }
 
-process.stdin.on('data', (data) => {
-  if (foregroundChildProcessId != null) {
-    if (String(data) == '\r' || String(data) == '\n') {
-      runningChilds[foregroundChildProcessId].stdin.write('\n');
-    } else {
-      runningChilds[foregroundChildProcessId].stdin.write(data);
-    }
-  }
-});
+// process.stdin.on('data', (data) => {
+//   if (foregroundChildProcessId != null) {
+//     // if (String(data) == '\r' || String(data) == '\n') {
+//     //   console.log(`writing to child(${foregroundChildProcessId}) : slash n`);
+//     //   runningChilds[foregroundChildProcessId].stdin.write('\n');
+//     // } else {
+//     //   console.log(`writing to child(${foregroundChildProcessId}) : ${data}`);
+//     //   runningChilds[foregroundChildProcessId].stdin.write(data);
+//     // }
+//     runningChilds[foregroundChildProcessId].stdin.write(data);
+//   }
+// });
 
 // for some reason, it is set on raw mode and ctrl+c does not run the handler in that
 // so removing raw mode manually.
 // but this is making input being printed again
-process.stdin.setRawMode(false);
+// process.stdin.setRawMode(false);
 
 // // code to handle ctrl+c
 process.on('SIGINT', () => {
@@ -194,7 +224,10 @@ process.on('SIGINT', () => {
   if (foregroundChildProcessId) {
     // handle
     // send SIGINT to the forground process.
-    runningChilds[foregroundChildProcessId].kill('SIGINT');
+    // console.log(`Sending SIGINT to pid ${foregroundChildProcessId}, ${runningChilds[foregroundChildProcessId].kill}`);
+    // runningChilds[foregroundChildProcessId].kill('SIGINT');
+    child_process.execSync(`kill -2 ${foregroundChildProcessId}`);
+    // console.log(`kill -2 ${foregroundChildProcessId}`);
   }
   else {
     releaseResources();
@@ -208,17 +241,27 @@ process.on('SIGTSTP', () => {
   if (foregroundChildProcessId) {
     // handle
     console.log(`Pid : ${foregroundChildProcessId}`);
-    foregroundChildProcessId = null;
+    // runningChilds[foregroundChildProcessId].kill('SIGSTOP');
+    child_process.execSync(`kill -19 ${foregroundChildProcessId}`);
+    // console.log(`kill -19 ${foregroundChildProcessId}`);
     setTimeout(() => {
       askAndHandleCommand();
     }, 100);
+    foregroundChildProcessId = null;
   }
   else {
     // ignore for now...
     // ideally, the process should be temporarliy stopped somehow,
     // and control returned to bash(or whatever)
+    console.log('nothing on foreground, gonna ignore');
   }
 });
+
+// setInterval(() => {
+//   console.log(foregroundChildProcessId);
+//   console.log(runningChilds[foregroundChildProcessId]?.connected);
+//   // console.log(runningChilds[foregroundChildProcessId]);
+// }, 5000);
 
 
 //--------------
