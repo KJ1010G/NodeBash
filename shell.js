@@ -1,19 +1,21 @@
 import * as readline from 'node:readline';
-import { stdin as input, stdout as output } from 'node:process';
 import os from 'node:os';
 import process from 'node:process';
 import fs from 'node:fs';
 import child_process from 'node:child_process';
-import tty from 'node:tty';
 
-const rl = readline.createInterface({ input, output });
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  terminal: false
+});
 
 // set cwd to user's home dir
 process.chdir(os.homedir());
 
 let runningChilds = {};
 
-let foregroundChildProcess = null;
+let foregroundChildProcessId = null;
 
 function releaseResources() {
   rl.close(); // application will not terminate until the readline.Interface is closed
@@ -111,9 +113,9 @@ function fg(cmdArr) {
   if (cmdArr.length != 2) {
     console.log("fg expects just pid as its argument");
   }
-  if (foregroundChildProcess == null) {
+  if (foregroundChildProcessId == null) {
     if (runningChilds[cmdArr[1]]) {
-      foregroundChildProcess = runningChilds[cmdArr[1]];
+      foregroundChildProcessId = cmdArr[1];
     }
     else {
       console.log('Invalid pid');
@@ -123,7 +125,7 @@ function fg(cmdArr) {
     }
   }
   else {
-    console.log('forground is not null, this is unexpected');
+    console.log('foreground is not null, this is unexpected');
   }
 }
 
@@ -135,7 +137,7 @@ function pathToBinary(cmdArr) {
 
   childBinary.on('spawn', () => {
     successfullySpawned = true;
-    foregroundChildProcess = childBinary;
+    foregroundChildProcessId = childBinary.pid;
     runningChilds[childBinary.pid] = childBinary;
   });
 
@@ -152,12 +154,12 @@ function pathToBinary(cmdArr) {
     // console.error(`stderr: ${data}`);
     process.stderr.write(`${data}`);
   });
-
+    
   childBinary.on('close', (code) => {
     console.log(`command ${cmdArr[0]} exited with code ${code}`);
-    runningChilds[childBinary.pid] = undefined;
-    if (foregroundChildProcess == childBinary) {
-      foregroundChildProcess = null;
+    delete runningChilds[childBinary.pid];
+    if (foregroundChildProcessId == childBinary.pid) {
+      foregroundChildProcessId = null;
       setTimeout(() => {
         askAndHandleCommand();
       }, 100);
@@ -172,26 +174,27 @@ function pathToBinary(cmdArr) {
 }
 
 process.stdin.on('data', (data) => {
-  if (foregroundChildProcess != null) {
-    if (String(data) == '\r') {
-      foregroundChildProcess.stdin.write('\n');
+  if (foregroundChildProcessId != null) {
+    if (String(data) == '\r' || String(data) == '\n') {
+      runningChilds[foregroundChildProcessId].stdin.write('\n');
     } else {
-      foregroundChildProcess.stdin.write(data);
+      runningChilds[foregroundChildProcessId].stdin.write(data);
     }
   }
 });
 
 // for some reason, it is set on raw mode and ctrl+c does not run the handler in that
 // so removing raw mode manually.
+// but this is making input being printed again
 process.stdin.setRawMode(false);
 
 // // code to handle ctrl+c
 process.on('SIGINT', () => {
   console.log('Received SIGINT.');
-  if (foregroundChildProcess) {
+  if (foregroundChildProcessId) {
     // handle
     // send SIGINT to the forground process.
-    foregroundChildProcess.kill('SIGINT');
+    runningChilds[foregroundChildProcessId].kill('SIGINT');
   }
   else {
     releaseResources();
@@ -202,10 +205,10 @@ process.on('SIGINT', () => {
 // code to handle ctrl+z
 process.on('SIGTSTP', () => {
   console.log('Received SIGTSTP.');
-  if (foregroundChildProcess) {
+  if (foregroundChildProcessId) {
     // handle
-    console.log(`Pid : ${foregroundChildProcess.pid}`);
-    foregroundChildProcess = null;
+    console.log(`Pid : ${foregroundChildProcessId}`);
+    foregroundChildProcessId = null;
     setTimeout(() => {
       askAndHandleCommand();
     }, 100);
