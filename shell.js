@@ -117,7 +117,6 @@ function ls(cmdArr) {
 
 let justRanFg = false;
 function fg(cmdArr) {
-  // we need some data structure which links pid's to spawn returned variable.
 
   if (cmdArr.length != 2) {
     console.log("fg expects just pid as its argument");
@@ -126,23 +125,9 @@ function fg(cmdArr) {
     if (runningChilds[cmdArr[1]]) {
 
       // CLEAR STDIN BUFFER
-      justRanFg = true;
+      justRanFg = true; // so that child does not get this input
 
       foregroundChildProcessId = cmdArr[1];
-
-      // runningChilds[foregroundChildProcessId].kill('SIGCONT');
-
-      // child_process.execSync(`kill -18 ${foregroundChildProcessId}`);
-      // console.log(`kill -18 ${foregroundChildProcessId}`);
-
-      // runningChilds[foregroundChildProcessId].stdout.on('data', (data) => {
-      //   // console.log(`stdout: ${data}`);
-      //   process.stdout.write(`${data}`);
-      // });
-      // runningChilds[foregroundChildProcessId].stderr.on('data', (data) => {
-      //   // console.error(`stderr: ${data}`);
-      //   process.stderr.write(`${data}`);
-      // });
     }
     else {
       console.log('Invalid pid');
@@ -177,16 +162,6 @@ function pathToBinary(cmdArr) {
     console.error(`${cmdArr[0]}: error: ${err.message}`);
   });
 
-  // childBinary.stdout.on('data', (data) => {
-  //   // console.log(`stdout: ${data}`);
-  //   process.stdout.write(`${data}`);
-  // });
-
-  // childBinary.stderr.on('data', (data) => {
-  //   // console.error(`stderr: ${data}`);
-  //   process.stderr.write(`${data}`);
-  // });
-
   childBinary.on('close', (code) => {
     console.log(`command ${cmdArr[0]} exited with code ${code}`);
     delete runningChilds[childBinary.pid];
@@ -211,17 +186,7 @@ function pathToBinary(cmdArr) {
 
 process.stdin.on('data', (data) => {
   if (foregroundChildProcessId != null) {
-    // if (String(data) == '\r' || String(data) == '\n') {
-    //   console.log(`writing to child(${foregroundChildProcessId}) : slash n`);
-    //   runningChilds[foregroundChildProcessId].stdin.write('\n');
-    // } else {
-    //   console.log(`writing to child(${foregroundChildProcessId}) : ${data}`);
-    //   runningChilds[foregroundChildProcessId].stdin.write(data);
-    // }
-    // if () { // if data is ctrl + C or ctrl + Z or ctrl + anything.... dont write
-      
-    // }
-    if (justRanFg) {
+    if (justRanFg) { // ignore the input
       justRanFg = false;
       return;
     }
@@ -229,23 +194,12 @@ process.stdin.on('data', (data) => {
   }
 });
 
-// for some reason, it is set on raw mode and ctrl+c does not run the handler in that
-// so removing raw mode manually.
-// but this is making input being printed again
-// process.stdin.setRawMode(false);
-
-// // code to handle ctrl+c
+// code to handle ctrl+c
 process.on('SIGINT', () => {
   console.log('Received SIGINT.');
   if (foregroundChildProcessId) {
-    // handle
-    // send SIGINT to the forground process.
-    // console.log(`Sending SIGINT to pid ${foregroundChildProcessId}, ${runningChilds[foregroundChildProcessId].kill}`);
-    // runningChilds[foregroundChildProcessId].kill('SIGINT');
-    // child_process.execSync(`kill -2 ${foregroundChildProcessId}`);
-    // console.log(`kill -2 ${foregroundChildProcessId}`);
-
-    // NO NEED TO DO ANYTHING, IT WILL RECEIVE SIGINT AUTOMATICALLY AS IT ALSO RECEIVES CTRL+C INPUT
+    // NO NEED TO DO ANYTHING, FOREGROUND PROCESS WILL RECEIVE SIGINT AUTOMATICALLY
+    // AS IT ALSO RECEIVES CTRL+C INPUT
   }
   else {
     releaseResources();
@@ -256,41 +210,28 @@ process.on('SIGINT', () => {
 // code to handle ctrl+z
 process.on('SIGTSTP', () => {
   console.log('Received SIGTSTP.');
-  if (foregroundChildProcessId) {
-    // handle
-    console.log(`Pid : ${foregroundChildProcessId}`);
-    // runningChilds[foregroundChildProcessId].kill('SIGSTOP');
-    // child_process.execSync(`kill -19 ${foregroundChildProcessId}`);
-    // console.log(`kill -19 ${foregroundChildProcessId}`);
-
+  if (foregroundChildProcessId) { 
     // RUNNING PROGRAM RECEIVES CTRL + Z TOO AND HENCE IS STOPPED
     // WE WANT IT TO CONTINUE RUNNING BUT JUST IN BACKGROUND
     // SO WE GIT IT A SIGNAL TO CONTINUE
-    runningChilds[foregroundChildProcessId].kill('SIGCONT'); // because it gets stopped (I think its because it also receives ctrl+Z input)
+    runningChilds[foregroundChildProcessId].kill('SIGCONT');
 
+    console.log(`Pid : ${foregroundChildProcessId}`);
+    foregroundChildProcessId = null;
     setTimeout(() => {
       askAndHandleCommand();
     }, 100);
-    foregroundChildProcessId = null;
   }
   else {
-    // ignore for now...
-    // ideally, the process should be temporarliy stopped somehow,
-    // and control returned to bash(or whatever)
-    console.log('nothing on foreground, gonna ignore');
+    // stop the parent process.
+    process.kill(process.pid, 'SIGSTOP');
   }
 });
-
-// setInterval(() => {
-//   console.log(foregroundChildProcessId);
-//   console.log(runningChilds[foregroundChildProcessId]?.connected);
-//   // console.log(runningChilds[foregroundChildProcessId]);
-// }, 5000);
 
 
 //--------------
 
-
+// start with asking for command
 setTimeout(() => {
   askAndHandleCommand();
 }, 0);
